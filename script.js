@@ -121,5 +121,81 @@
     autre.required = isOther;
   });
 
+  /* Envoi : en arrière-plan (sans quitter le site), avec plan B si le service est en panne */
+  var form = document.getElementById('contactForm');
+  var status = document.getElementById('formStatus');
+  var submitBtn = form.querySelector('button[type="submit"]');
+  var EMAIL = 'joelmitsoaye@gmail.com';
+  var WHATSAPP = '22892972885';
+
+  function buildMessage(d) {
+    var svc = d.service === 'autre' ? ('Autre : ' + (d.autre_service || '')) : d.service;
+    return 'Nouvelle demande depuis le portfolio\n\n' +
+      'Nom : ' + d.nom + '\n' +
+      'E-mail : ' + d.email + '\n' +
+      'Téléphone / WhatsApp : ' + d.telephone + '\n' +
+      'Service : ' + svc + '\n\n' +
+      'Description :\n' + d.description + '\n\n' +
+      (d.infos ? 'Autres informations :\n' + d.infos + '\n' : '');
+  }
+
+  function showStatus(html, ok) {
+    status.className = 'form-status ' + (ok ? 'ok' : 'err');
+    status.innerHTML = html;
+    status.hidden = false;
+    status.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var d = {};
+    new FormData(form).forEach(function (v, k) { d[k] = v; });
+    if (d._honey) return;
+
+    submitBtn.disabled = true;
+    var oldLabel = submitBtn.textContent;
+    submitBtn.textContent = 'Envoi en cours…';
+    status.hidden = true;
+
+    var ctrl = ('AbortController' in window) ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 12000);
+
+    fetch('https://formsubmit.co/ajax/' + EMAIL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(d),
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (j) {
+      if (j && (j.success === 'true' || j.success === true)) {
+        form.reset(); wrap.hidden = true; autre.required = false;
+        showStatus('Merci ! Votre demande a bien été envoyée. Je vous réponds très vite.', true);
+      } else {
+        throw new Error('Réponse inattendue');
+      }
+    }).catch(function () {
+      var msg = buildMessage(d);
+      var mail = 'mailto:' + EMAIL + '?subject=' + encodeURIComponent('Nouveau projet depuis le portfolio') + '&body=' + encodeURIComponent(msg);
+      var wa = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent(msg);
+      showStatus(
+        'L’envoi automatique est momentanément indisponible. Vos informations sont conservées : envoyez-les en un clic par ' +
+        '<a href="' + mail + '">e-mail</a> ou par <a href="' + wa + '" target="_blank" rel="noopener">WhatsApp</a>.',
+        false
+      );
+    }).then(function () {
+      clearTimeout(timer);
+      submitBtn.disabled = false;
+      submitBtn.textContent = oldLabel;
+    });
+  });
+
+  /* Retour en haut */
+  document.getElementById('backTop').addEventListener('click', function (e) {
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
   document.getElementById('year').textContent = new Date().getFullYear();
 })();
